@@ -1,5 +1,4 @@
-MQTT Warehouse
-##############
+# MQTT Warehouse
 
 > **MQTT Warehouse** is a cute simulation of an intelligent Internet of Things warehouse where forklifts can be driven by MQTT.
 
@@ -14,14 +13,14 @@ Goal
 
 Your task is to create an application which is able to control a forklift over MQTT. It is up to you which programing language or framework will you pick. Our recommendation is [Node-RED](https://nodered.org/) with a [flavor of coffee](https://flows.nodered.org/node/node-red-contrib-coffeescript).
 
-Your goal is to drive a forklift in the warehouse. 
+Your goal is to drive a `forklift` in the warehouse. 
 
-* You must avoid shelves and other forklifts. That will cost you points.
+* You must avoid `shelves` and other `forklifts`. That will cost you points.
 * You should pickup `containers` with goods and transport them to designated `unloading zones`. For this you will receive points.
 * When loaded with container, you must avoid other containers till you reach the unloading zone. Collisions will cost you points.
 * Your goal is to get the biggest score!
 
-MQTT Warehouse supports multi-player!
+Yes, MQTT Warehouse supports multi-player!
 
 You control your forklift by setting a velocity and angular acceleration. But beware, dampening is applied to you movement. The forklift controller will compute all the heavy math connected with motor control for you.
 
@@ -169,12 +168,19 @@ mosquitto_pub -t 'warehouse/daae060e7e872f812e20b03810f2f4df351fd446/remove' -m 
 
 **See a forklift status**
 
+TODO
+
 **See warehouse status**
 
+TODO
+
 **See warehouse settings**
+
+TODO
 
 This MQTT message is retained.
 
 Tips
 ====
+
 Best way how to create the control MQTT application is to use the advantage of periodic broadcasts of status messages about the warehouse and forklift. These messages are sent periodically. Warehouse status is sent based on a time interval and forklift status is sent as a reaction to forklift control MQTT topic update.
