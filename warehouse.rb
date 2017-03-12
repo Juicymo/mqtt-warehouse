@@ -95,6 +95,7 @@ class Room < Chingu::GameState
 	
 	ZONES = 3
 	CONTAINERS = 20
+	MAX_FORKLIFTS = 10
 	def setup
 		@parallax = Chingu::Parallax.create(:x => 200, :y => 200, :rotation_center => :top_left)
 		@parallax << { :image => "floor.png", :repeat_x => true, :repeat_y => true}
@@ -117,6 +118,7 @@ class Room < Chingu::GameState
 		print 'Creating shelves'
 		2.times do |i|
 			6.times do |j|
+				next if i == 0 && j == 0
 				x = SHELF_GAP + ((SHELF_WIDTH + SHELF_GAP) * 2 * j)
 				y = SHELF_GAP + ((SHELF_HEIGHT * 2 + SHELF_CORIDOR) * i)
 				
@@ -242,9 +244,10 @@ class Room < Chingu::GameState
 			@mqtt_status_interval = 0
 		end
 		
-		@scoreboard.text = @forklifts.map {|f| "#{f[1].name}: #{f[1].score}"}.join(', ')
+		@scoreboard.text = @forklifts.map {|f| "#{f[1].name}: #{f[1].score}"}.join("\n")
+		@scoreboard.color = @black
 		
-		$window.caption = "MQTT Warehouse FPS: #{fps} Objects: #{game_objects.size}"
+		$window.caption = "MQTT Warehouse | FPS: #{fps} | Objects: #{game_objects.size}"
 	end
 	
 	def send_forklifts_status
@@ -280,14 +283,18 @@ class Room < Chingu::GameState
 				
 				# name=Robot,key=<KEY>
 				if name == 'create'
-					data = parse_message_payload message
-					topic = "created/#{data[:key]}"
-					
-					token = Digest::SHA1.hexdigest(data[:name] + Time.now.to_s)
-					
-					@forklifts[token] = create_forklift data[:name]
-					
-					send_mqtt_command topic, "name=#{data[:name]},token=#{token}"
+					if @forklifts.size < MAX_FORKLIFTS
+						data = parse_message_payload message
+						topic = "created/#{data[:key]}"
+						
+						token = Digest::SHA1.hexdigest(data[:name] + Time.now.to_s)
+						
+						@forklifts[token] = create_forklift data[:name]
+						
+						send_mqtt_command topic, "name=#{data[:name]},token=#{token}"
+					else
+						puts "Cannot create additional forklift \"#{data[:name]}\". Maximum forklift limit of #{MAX_FORKLIFTS} is reached."
+					end
 				elsif name.include? '/remove'
 					token = parse_token name
 					
