@@ -166,7 +166,13 @@ Example MQTT message can be sent via Mosquitto CLI:
 mosquitto_pub -t 'warehouse/daae060e7e872f812e20b03810f2f4df351fd446/remove' -m ''
 ```
 
+You have to send the empty payload within the message. The payload value is ignored.
+
 **See a forklift status**
+
+When status of a forklift is changed (either by a collision or by a control command from MQTT) a new message is published to a topic `warehouse/<ACCESS_TOKEN>/status` where `<ACCESS_TOKEN>` has to be substituted by your `ACCESS_TOKEN`.
+
+> You can use this topic to trigger decision logic in your fork lift control application.
 
 ```bash
 mosquitto_sub -v -t 'warehouse/daae060e7e872f812e20b03810f2f4df351fd446/status'
