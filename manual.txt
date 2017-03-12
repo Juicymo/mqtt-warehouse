@@ -1,0 +1,19 @@
+1) Subscribe
+- topic: 'warehouse/created/<ACCESS_KEY>'
+
+2) Publish
+- topic: 'warehouse/create', message: 'name=<NAME>,key=<ACCESS_KEY>'
+
+3) You should receive your <ACCESS_TOKEN> in topic from step 1)
+
+4) Control:
+- topic: 'warehouse/<ACCESS_TOKEN>/control', message 'r=-0.5,m=0.4'
+- topic: 'warehouse/<ACCESS_TOKEN>/control', message 'm=0.5'
+- topic: 'warehouse/<ACCESS_TOKEN>/control', message 'r=-0.8'
+- topic: 'warehouse/<ACCESS_TOKEN>/control', message 'r=0.0,m=0.0'
+
+r .. -1.0 - 1.0
+m .. -0.5 - 0.5
+
+5) Remove:
+- topic: 'warehouse/<ACCESS_TOKEN>/remove'

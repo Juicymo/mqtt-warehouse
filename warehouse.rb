@@ -1,13 +1,20 @@
 #!/usr/bin/env ruby
 require 'rubygems' rescue nil
 $LOAD_PATH.unshift File.join(File.expand_path(__FILE__), "..", "..", "lib")
+require_relative 'lib/core_extensions'
 require_relative 'lib/chingu/traits/rotation'
 require_relative 'lib/chingu/traits/direction'
 require 'chingu'
 require 'mqtt'
 require 'digest/sha1'
+require 'json'
+
 include Gosu
 include Chingu
+
+MQTT_IP = '127.0.0.1'
+WAREHOUSE_WIDTH = 640
+WAREHOUSE_HEIGHT = 800
 
 # MQTT Warehouse
 # --------------
@@ -18,7 +25,7 @@ include Chingu
 #
 class Warehouse < Chingu::Window
 	def initialize
-		super(800, 600)
+		super(WAREHOUSE_WIDTH, WAREHOUSE_HEIGHT)
 		
 		self.factor = 1
 		
@@ -39,6 +46,9 @@ class Room < Chingu::GameState
 		@black = Color.new(0xFF000000)
 		
 		@forklifts = {}
+		@containers = []
+		@shelves = []
+		@zones = []
 		
 		@messages = {}
 		messages = @messages
@@ -47,7 +57,7 @@ class Room < Chingu::GameState
 		outbox = @outbox
 		
 		@mqtt_processor = Thread.new do
-			MQTT::Client.connect('127.0.0.1') do |client|
+			MQTT::Client.connect(MQTT_IP) do |client|
 				# From client to warehouse:
 				# 	warehouse/create (send <KEY> and name as payload)
 				# 	warehouse/<TOKEN>/control
@@ -67,7 +77,7 @@ class Room < Chingu::GameState
 		end
 		
 		@mqtt_sender = Thread.new do
-			MQTT::Client.connect('127.0.0.1') do |client|
+			MQTT::Client.connect(MQTT_IP) do |client|
 				while true do
 					outbox.each do |topic, messages|
 						while message = messages.shift
@@ -75,14 +85,16 @@ class Room < Chingu::GameState
 						end
 					end
 					
-					sleep 10
+					sleep 1
 				end
 			end
 		end
+		
+		@mqtt_status_interval = 0
 	end
 	
 	ZONES = 3
-	CONTAINERS = 50
+	CONTAINERS = 20
 	def setup
 		@parallax = Chingu::Parallax.create(:x => 200, :y => 200, :rotation_center => :top_left)
 		@parallax << { :image => "floor.png", :repeat_x => true, :repeat_y => true}
@@ -91,6 +103,8 @@ class Room < Chingu::GameState
 		create_delivery_zones
 		create_containers
 		@forklifts[:default] = create_forklift 'Default'
+		
+		send_mqtt_warehouse_settings
 		
 		@scoreboard = Chingu::Text.create("Loading...", :x => 10, :y => 10, :size => 30, :color => @black)
 	end
@@ -106,10 +120,10 @@ class Room < Chingu::GameState
 				x = SHELF_GAP + ((SHELF_WIDTH + SHELF_GAP) * 2 * j)
 				y = SHELF_GAP + ((SHELF_HEIGHT * 2 + SHELF_CORIDOR) * i)
 				
-				Shelf.create(:x => x, :y => y)
-				Shelf.create(:x => x + SHELF_WIDTH + 1, :y => y)
-				Shelf.create(:x => x, :y => y + SHELF_HEIGHT + 1)
-				Shelf.create(:x => x + SHELF_WIDTH + 1, :y => y + SHELF_HEIGHT + 1)
+				@shelves << Shelf.create(:x => x, :y => y)
+				@shelves << Shelf.create(:x => x + SHELF_WIDTH + 1, :y => y)
+				@shelves << Shelf.create(:x => x, :y => y + SHELF_HEIGHT + 1)
+				@shelves << Shelf.create(:x => x + SHELF_WIDTH + 1, :y => y + SHELF_HEIGHT + 1)
 				print '.'
 			end
 		end
@@ -118,7 +132,7 @@ class Room < Chingu::GameState
 	
 	def create_delivery_zones
 		print 'Creating delivery zones'
-		ZONES.times { DeliveryZone.create(:x => rand($window.width - (300*0.25)), :y => rand($window.height - (232*0.25))) }
+		ZONES.times { @zones << DeliveryZone.create(:x => rand($window.width - (300*0.25)), :y => rand($window.height - (232*0.25))) }
 		
 		ok = false
 		while !ok
@@ -137,7 +151,7 @@ class Room < Chingu::GameState
 	
 	def create_containers
 		print 'Creating containers'
-		CONTAINERS.times { Container.create(:x => rand($window.width - (50*0.5)), :y => rand($window.height - (40*0.5)), :angle => rand(360)) }
+		CONTAINERS.times { @containers << Container.create(:x => rand($window.width - (50*0.5)), :y => rand($window.height - (40*0.5)), :angle => rand(360)) }
 		
 		ok = false
 		while !ok
@@ -156,7 +170,20 @@ class Room < Chingu::GameState
 	end
 	
 	def create_forklift name
-		print 'Creating forklift'
+		to_be_removed = []
+		@forklifts.each do |token, forklift|
+			if forklift.name == name
+				puts "Removing forklift \"#{name}\""
+				forklift.destroy
+				to_be_removed << token
+			end
+		end
+		
+		to_be_removed.each do |token|
+			@forklifts.delete token
+		end
+	
+		print "Creating forklift \"#{name}\""
 		forklift = Forklift.create(:x => rand($window.width - (117*0.5)), :y => rand($window.height - (50*0.5)), :angle => rand(360))
 		forklift.name = name
 		
@@ -182,7 +209,7 @@ class Room < Chingu::GameState
 		super
 		
 		process_mqtt_commands
-	
+		
 		game_objects.each { |go| go.color = @white }
 	
 		Forklift.each_collision(DeliveryZone) do |forklift, _|
@@ -208,9 +235,41 @@ class Room < Chingu::GameState
 			end
 		end
 		
+		@mqtt_status_interval += 1
+		if @mqtt_status_interval >= 60
+			send_mqtt_status
+			send_forklifts_status
+			@mqtt_status_interval = 0
+		end
+		
 		@scoreboard.text = @forklifts.map {|f| "#{f[1].name}: #{f[1].score}"}.join(', ')
 		
 		$window.caption = "MQTT Warehouse FPS: #{fps} Objects: #{game_objects.size}"
+	end
+	
+	def send_forklifts_status
+		@forklifts.each do |token, forklift|
+			next if !forklift.dirty
+		
+			payload = {status: forklift.data, time: Time.now}
+			forklift.dirty = false
+			
+			send_mqtt_command "#{token}/status", JSON.generate(payload)
+		end
+	end
+	
+	def send_mqtt_status
+		payload = {forklifts: {}, containers: [], time: Time.now}
+		
+		@forklifts.each do |_, forklift|
+			payload[:forklifts][forklift.name] = forklift.data
+		end
+		
+		@containers.each do |container|
+			payload[:containers] << container.data
+		end
+	
+		send_mqtt_command 'status', JSON.generate(payload)
 	end
 	
 	def process_mqtt_commands
@@ -233,8 +292,9 @@ class Room < Chingu::GameState
 					token = parse_token name
 					
 					if @forklifts[token] != nil
+						puts "Removing forklift \"#{@forklifts[token].name}\"..."
 						@forklifts[token].destroy
-						@forklifts[token] = nil
+						@forklifts.remove!(token)
 					else
 						puts "Warning: Trying to remove non-existing forklift #{token}"
 					end
@@ -255,13 +315,37 @@ class Room < Chingu::GameState
 		topic.split('/')[0]
 	end
 	
+	def send_mqtt_warehouse_settings
+		payload = {dimensions: {}, positions: {}, time: Time.now}
+		
+		payload[:dimensions][:arena] = {h: WAREHOUSE_HEIGHT, w: WAREHOUSE_WIDTH}
+		payload[:dimensions][:forklift] = {h: 25, w: 59}
+		payload[:dimensions][:container] = {h: 20, w: 25}
+		payload[:dimensions][:zone] = {h: 58, w: 75}
+		payload[:dimensions][:shelve] = {h: 105, w: 21}
+		payload[:positions][:shelves] = []
+		payload[:positions][:zones] = []
+		
+		@shelves.each do |shelf|
+			payload[:positions][:shelves] << shelf.data
+		end
+		
+		@zones.each do |zone|
+			payload[:positions][:zones] << zone.data
+		end
+		
+		MQTT::Client.connect(MQTT_IP) do |client|
+			client.publish("warehouse/settings", JSON.generate(payload), true)
+		end
+	end
+	
 	def send_mqtt_command topic, message
 		@outbox[topic] ||= []
 		@outbox[topic] << message
 	end
 	
 	def parse_message_payload message
-		raw_data = message.split(',').map{|x|a = x.split('=');{a[0].to_sym => a[1]}}
+		raw_data = message.gsub(/\s/, '').split(',').map{|x|a = x.split('=');{a[0].to_sym => a[1]}}
 		data = {}
 		raw_data.each { |d| data.merge!(d) }
 		
@@ -272,6 +356,8 @@ end
 class Shelf < GameObject
 	trait :bounding_box, :debug => false
 	traits :collision_detection
+
+	attr_reader :data
 	
 	def setup
 		@image = Image["shelf.png"]
@@ -279,17 +365,27 @@ class Shelf < GameObject
 		
 		cache_bounding_box
 	end
+	
+	def data
+		{x: self.x, y: self.y}
+	end
 end
 
 class Container < GameObject
 	trait :bounding_circle, :debug => true
 	traits :collision_detection
+	
+	attr_reader :data
 
 	def setup
 		@image = Image["container.png"]
 		self.factor = 0.5
 
 		cache_bounding_circle
+	end
+	
+	def data
+		{x: x, y: y}
 	end
 
 	def radius
@@ -301,11 +397,17 @@ class DeliveryZone < GameObject
 	trait :bounding_box, :debug => false
 	traits :collision_detection
 
+	attr_reader :data
+	
 	def setup
 		@image = Image["stripes.png"]
 		self.factor = 0.25
 
 		cache_bounding_box
+	end
+
+	def data
+		{x: x, y: y}
 	end
 end
 
@@ -313,8 +415,8 @@ class Forklift < GameObject
 	trait :bounding_circle, :debug => true
 	traits :velocity, :collision_detection, :rotation, :direction
 	
-	attr_accessor :name
-	attr_reader :score
+	attr_accessor :name, :dirty
+	attr_reader :score, :data
 	
 	MOVE_DAMPENING = 0.004
 	TURN_DAMPENING = 0.004
@@ -329,6 +431,7 @@ class Forklift < GameObject
 		@loaded = false
 		@score = 0
 		@name = "Unknown"
+		@dirty = true
 		self.velocity_x = 0
 		self.velocity_y = 0
 		self.input = [:holding_left, :holding_right, :holding_down, :holding_up, :s, :r]  # NOTE: giving input an Array, not a Hash
@@ -349,20 +452,26 @@ class Forklift < GameObject
 	
 	def control command
 		# r=0.5,m=0.5
-		puts "Forklift #{self.name}: #{command}"
+		puts "Forklift #{self.name}: Received command \"#{command}\""
 		commands = parse_command_data command
 		
 		if commands[:r] != nil
+			@dirty = true
 			self.angular_acceleration = [[commands[:r].to_f, -self.max_angular_acceleration].max, self.max_angular_acceleration].min
 			puts "Forklift #{self.name}: Setting angular acceleration to #{self.angular_acceleration}"
 		end
 		
 		if commands[:m] != nil
+			@dirty = true
 			delta = [[commands[:m].to_f, -MAX_MOVE_ACCELERATION].max, MAX_MOVE_ACCELERATION].min
 			self.decrease_movement_velocity delta.abs if delta < 0
 			self.increase_movement_velocity delta.abs if delta > 0
 			puts "Forklift #{self.name}: Adjusting velocity by #{delta}"
 		end
+	end
+	
+	def data
+		{name: self.name, x: self.x, y: self.y, angle: self.angle, score: self.score, loaded: loaded?}
 	end
 	
 	def parse_command_data command
@@ -378,19 +487,23 @@ class Forklift < GameObject
 	end
 	
 	def crash!
+		@dirty = true
 		@score -= 1
 	end
 	
 	def add_delivery!
+		@dirty = true
 		@score += 10
 	end
 	
 	def load!
+		@dirty = true
 		@image = Image["forklift_loaded.png"]
 		@loaded = true
 	end
 	
 	def unload!
+		@dirty = true
 		@image = Image["forklift.png"]
 		@loaded = false
 	end

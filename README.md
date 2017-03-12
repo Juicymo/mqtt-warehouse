@@ -130,25 +130,25 @@ Example MQTT message can be sent via Mosquitto CLI:
 
 Rotate right, move forward at full speed:
 
-```
+```bash
 mosquitto_pub -t 'warehouse/daae060e7e872f812e20b03810f2f4df351fd446/control' -m 'r=0.2,m=0.5'
 ```
 
 Rotate right, break or move backwards at full speed.
 
-```
+```bash
 mosquitto_pub -t 'warehouse/daae060e7e872f812e20b03810f2f4df351fd446/control' -m 'r=-0.2,m=-0.5'
 ```
 
 Stop rotation, slowly move forward:
 
-```
+```bash
 mosquitto_pub -t 'warehouse/daae060e7e872f812e20b03810f2f4df351fd446/control' -m 'r=0.0,m=0.1'
 ```
 
 All stop (both movement and rotation):
 
-```
+```bash
 mosquitto_pub -t 'warehouse/daae060e7e872f812e20b03810f2f4df351fd446/control' -m 'r=0.0,m=0.0'
 ```
 
@@ -162,23 +162,401 @@ Payload is ignored for this message.
 
 Example MQTT message can be sent via Mosquitto CLI:
 
-```
+```bash
 mosquitto_pub -t 'warehouse/daae060e7e872f812e20b03810f2f4df351fd446/remove' -m ''
 ```
 
 **See a forklift status**
 
-TODO
+```bash
+mosquitto_sub -v -t 'warehouse/daae060e7e872f812e20b03810f2f4df351fd446/status'
+```
+
+Payload of this topic is JSON in the following format:
+
+```json
+{
+  "status": {
+	"name": "Robot",
+	"x": 341.40657802864234,
+	"y": 288.36168023734655,
+	"angle": 232,
+	"score": 0,
+	"loaded": false
+  },
+  "time": "2017-03-12 20:50:32 +0100"
+}
+```
 
 **See warehouse status**
 
-TODO
+This topic provides information about status of all dynamic elements in the warehouse - like forklifts and containers.
+
+New message is broadcasted regularly by the warehouse. Regular updates from this topic can be used for your forklift controlling logic.
+
+```bash
+mosquitto_sub -v -t 'warehouse/status'
+```
+
+Payload of this topic is JSON in the following format:
+
+```json
+{
+  "forklifts": {
+	"Default": {
+	  "name": "Default",
+	  "x": 495,
+	  "y": 98,
+	  "angle": 81,
+	  "score": 0,
+	  "loaded": false
+	},
+	"Robot": {
+	  "name": "Robot",
+	  "x": 335.2759202314379,
+	  "y": 280.5147960899757,
+	  "angle": 232,
+	  "score": 0,
+	  "loaded": false
+	}
+  },
+  "containers": [
+	{
+	  "x": 493,
+	  "y": 540
+	},
+	{
+	  "x": 314,
+	  "y": 483
+	},
+	{
+	  "x": 188,
+	  "y": 556
+	},
+	{
+	  "x": 276,
+	  "y": 751
+	},
+	{
+	  "x": 581,
+	  "y": 645
+	},
+	{
+	  "x": 30,
+	  "y": 508
+	},
+	{
+	  "x": 436,
+	  "y": 101
+	},
+	{
+	  "x": 205,
+	  "y": 660
+	},
+	{
+	  "x": 329,
+	  "y": 217
+	},
+	{
+	  "x": 191,
+	  "y": 509
+	},
+	{
+	  "x": 455,
+	  "y": 542
+	},
+	{
+	  "x": 157,
+	  "y": 700
+	},
+	{
+	  "x": 18,
+	  "y": 382
+	},
+	{
+	  "x": 355,
+	  "y": 736
+	},
+	{
+	  "x": 183,
+	  "y": 746
+	},
+	{
+	  "x": 458,
+	  "y": 231
+	},
+	{
+	  "x": 353,
+	  "y": 686
+	},
+	{
+	  "x": 539,
+	  "y": 765
+	},
+	{
+	  "x": 141,
+	  "y": 398
+	},
+	{
+	  "x": 471,
+	  "y": 307
+	}
+  ],
+  "time": "2017-03-12 20:51:14 +0100"
+}
+```
 
 **See warehouse settings**
 
-TODO
+This topic provides all static information from the warehouse - like dimensions of all objects and positions of all objects which are not moved in the simulation - like shelves and zones.
 
-This MQTT message is retained.
+When a new MQTT warehouse is generated, new message into this topic (`warehouse/settings`) is posted.
+
+This MQTT message is retained. So newly connected subscribers will receive it as well (even if they will connect after the message was posted).
+
+```bash
+mosquitto_sub -v -t 'warehouse/settings'
+```
+
+Payload of this topic is JSON in the following format:
+
+```json
+{
+  "dimensions": {
+	"arena": {
+	  "h": 800,
+	  "w": 640
+	},
+	"forklift": {
+	  "h": 25,
+	  "w": 59
+	},
+	"container": {
+	  "h": 20,
+	  "w": 25
+	},
+	"zone": {
+	  "h": 58,
+	  "w": 75
+	},
+	"shelve": {
+	  "h": 105,
+	  "w": 21
+	}
+  },
+  "positions": {
+	"shelves": [
+	  {
+		"x": 60,
+		"y": 60
+	  },
+	  {
+		"x": 82,
+		"y": 60
+	  },
+	  {
+		"x": 60,
+		"y": 166
+	  },
+	  {
+		"x": 82,
+		"y": 166
+	  },
+	  {
+		"x": 222,
+		"y": 60
+	  },
+	  {
+		"x": 244,
+		"y": 60
+	  },
+	  {
+		"x": 222,
+		"y": 166
+	  },
+	  {
+		"x": 244,
+		"y": 166
+	  },
+	  {
+		"x": 384,
+		"y": 60
+	  },
+	  {
+		"x": 406,
+		"y": 60
+	  },
+	  {
+		"x": 384,
+		"y": 166
+	  },
+	  {
+		"x": 406,
+		"y": 166
+	  },
+	  {
+		"x": 546,
+		"y": 60
+	  },
+	  {
+		"x": 568,
+		"y": 60
+	  },
+	  {
+		"x": 546,
+		"y": 166
+	  },
+	  {
+		"x": 568,
+		"y": 166
+	  },
+	  {
+		"x": 708,
+		"y": 60
+	  },
+	  {
+		"x": 730,
+		"y": 60
+	  },
+	  {
+		"x": 708,
+		"y": 166
+	  },
+	  {
+		"x": 730,
+		"y": 166
+	  },
+	  {
+		"x": 870,
+		"y": 60
+	  },
+	  {
+		"x": 892,
+		"y": 60
+	  },
+	  {
+		"x": 870,
+		"y": 166
+	  },
+	  {
+		"x": 892,
+		"y": 166
+	  },
+	  {
+		"x": 60,
+		"y": 470
+	  },
+	  {
+		"x": 82,
+		"y": 470
+	  },
+	  {
+		"x": 60,
+		"y": 576
+	  },
+	  {
+		"x": 82,
+		"y": 576
+	  },
+	  {
+		"x": 222,
+		"y": 470
+	  },
+	  {
+		"x": 244,
+		"y": 470
+	  },
+	  {
+		"x": 222,
+		"y": 576
+	  },
+	  {
+		"x": 244,
+		"y": 576
+	  },
+	  {
+		"x": 384,
+		"y": 470
+	  },
+	  {
+		"x": 406,
+		"y": 470
+	  },
+	  {
+		"x": 384,
+		"y": 576
+	  },
+	  {
+		"x": 406,
+		"y": 576
+	  },
+	  {
+		"x": 546,
+		"y": 470
+	  },
+	  {
+		"x": 568,
+		"y": 470
+	  },
+	  {
+		"x": 546,
+		"y": 576
+	  },
+	  {
+		"x": 568,
+		"y": 576
+	  },
+	  {
+		"x": 708,
+		"y": 470
+	  },
+	  {
+		"x": 730,
+		"y": 470
+	  },
+	  {
+		"x": 708,
+		"y": 576
+	  },
+	  {
+		"x": 730,
+		"y": 576
+	  },
+	  {
+		"x": 870,
+		"y": 470
+	  },
+	  {
+		"x": 892,
+		"y": 470
+	  },
+	  {
+		"x": 870,
+		"y": 576
+	  },
+	  {
+		"x": 892,
+		"y": 576
+	  }
+	],
+	"zones": [
+	  {
+		"x": 388,
+		"y": 276
+	  },
+	  {
+		"x": 183,
+		"y": 737
+	  },
+	  {
+		"x": 156,
+		"y": 161
+	  }
+	]
+  },
+  "time": "2017-03-12 20:07:44 +0100"
+}
+```
 
 Tips
 ====
