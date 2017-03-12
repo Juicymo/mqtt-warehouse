@@ -6,7 +6,7 @@ MQTT Warehouse has been created by hackers at [Juicymo](https://www.juicymo.cz) 
 
 MQTT Warehouse is proudly used on [Unicorn College](https://www.unicorncollege.cz/) during the summer semester course *MC1: An introduction to Microcomputers*.
 
-TODO IMAGE AND CONSOLE
+![MQTT Warehouse](images/mqtt-warehouse.png)
 
 Goal
 ====
