@@ -103,7 +103,7 @@ class Room < Chingu::GameState
 		create_shelves
 		create_delivery_zones
 		create_containers
-		@forklifts[:default] = create_forklift 'Default'
+		@forklifts[:default] = create_forklift 'Default', true
 		
 		send_mqtt_warehouse_settings
 		
@@ -171,7 +171,7 @@ class Room < Chingu::GameState
 		puts
 	end
 	
-	def create_forklift name
+	def create_forklift name, default = false
 		to_be_removed = []
 		@forklifts.each do |token, forklift|
 			if forklift.name == name
@@ -186,7 +186,7 @@ class Room < Chingu::GameState
 		end
 	
 		print "Creating forklift \"#{name}\""
-		forklift = Forklift.create(:x => rand($window.width - (117*0.5)), :y => rand($window.height - (50*0.5)), :angle => rand(360))
+		forklift = (default ? DefaultForklift : Forklift).create(:x => rand($window.width - (117*0.5)), :y => rand($window.height - (50*0.5)), :angle => rand(360))
 		forklift.name = name
 		
 		ok = false
@@ -228,6 +228,29 @@ class Room < Chingu::GameState
 			forklift2.crash!; forklift2.unload! if forklift2.loaded?
 		end
 		Forklift.each_collision(Container) do |forklift, container|
+			if !forklift.loaded?
+				container.destroy
+				forklift.load!
+			else
+				forklift.crash!
+				forklift.color = @red
+			end
+		end
+		
+		DefaultForklift.each_collision(DeliveryZone) do |forklift, _|
+			if forklift.loaded?
+				forklift.unload!
+				forklift.add_delivery!
+			end
+			forklift.color = @green
+		end
+		DefaultForklift.each_collision(Shelf) { |forklift, _| forklift.color = @red; forklift.crash!; forklift.unload! if forklift.loaded? }
+		DefaultForklift.each_collision(Forklift) do |forklift1, forklift2|
+			forklift1.color, forklift2.color = @red, @red
+			forklift1.crash!; forklift1.unload! if forklift1.loaded?
+			forklift2.crash!; forklift2.unload! if forklift2.loaded?
+		end
+		DefaultForklift.each_collision(Container) do |forklift, container|
 			if !forklift.loaded?
 				container.destroy
 				forklift.load!
@@ -418,6 +441,14 @@ class DeliveryZone < GameObject
 	end
 end
 
+MOVE_DAMPENING = 0.004
+TURN_DAMPENING = 0.004
+MOVE_ACCELERATION = 0.01
+TURN_ACCELERATION = 0.01
+
+MAX_MOVE_ACCELERATION = 0.5 		# -0.5 - 0.5
+MAX_ANGULAR_ACCELERATION = 1.0	# -1.0 - 1.0
+
 class Forklift < GameObject
 	trait :bounding_circle, :debug => true
 	traits :velocity, :collision_detection, :rotation, :direction
@@ -425,14 +456,6 @@ class Forklift < GameObject
 	attr_accessor :name, :dirty
 	attr_reader :score, :data
 	
-	MOVE_DAMPENING = 0.004
-	TURN_DAMPENING = 0.004
-	MOVE_ACCELERATION = 0.01
-	TURN_ACCELERATION = 0.01
-	
-	MAX_MOVE_ACCELERATION = 0.5 		# -0.5 - 0.5
-	MAX_ANGULAR_ACCELERATION = 1.0	# -1.0 - 1.0
-
 	def setup
 		@image = Image["forklift.png"]
 		@loaded = false
@@ -441,8 +464,6 @@ class Forklift < GameObject
 		@dirty = true
 		self.velocity_x = 0
 		self.velocity_y = 0
-		self.input = [:holding_left, :holding_right, :holding_down, :holding_up, :s, :r]  # NOTE: giving input an Array, not a Hash
-	
 		#self.movement_direction = :backwards
 		#self.angular_acceleration = 0.4
 		self.max_angular_acceleration = MAX_ANGULAR_ACCELERATION
@@ -519,13 +540,6 @@ class Forklift < GameObject
 		@loaded
 	end
 	
-	def holding_left; self.turn -1; end
-	def holding_right; self.turn 1; end
-	def holding_down; self.decrease_movement_velocity MOVE_ACCELERATION; end
-	def holding_up; self.increase_movement_velocity MOVE_ACCELERATION; end
-	def s; self.movement_velocity = 0; end
-	def r; self.x = $window.width / 2; self.y = $window.height / 2; end
-
 	def update
 		# dampening
 		apply_dampening
@@ -544,6 +558,21 @@ class Forklift < GameObject
 		self.velocity_y += (self.velocity_y > 0) ? -MOVE_DAMPENING : MOVE_DAMPENING if self.velocity_y != 0 && self.velocity_y.abs > MOVE_DAMPENING
 		self.velocity_y = 0 if self.velocity_y.abs <= MOVE_DAMPENING
 	end
+end
+
+class DefaultForklift < Forklift
+	def setup
+		super
+	
+		self.input = [:holding_left, :holding_right, :holding_down, :holding_up, :s, :r]  # NOTE: giving input an Array, not a Hash
+	end
+
+	def holding_left; self.turn -1; end
+	def holding_right; self.turn 1; end
+	def holding_down; self.decrease_movement_velocity MOVE_ACCELERATION; end
+	def holding_up; self.increase_movement_velocity MOVE_ACCELERATION; end
+	def s; self.movement_velocity = 0; end
+	def r; self.x = $window.width / 2; self.y = $window.height / 2; end
 end
 
 Warehouse.new.show
