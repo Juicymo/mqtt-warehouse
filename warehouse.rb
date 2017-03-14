@@ -94,7 +94,7 @@ class Room < Chingu::GameState
 	end
 	
 	ZONES = 3
-	CONTAINERS = 20
+	CONTAINERS = 10
 	MAX_FORKLIFTS = 10
 	def setup
 		@parallax = Chingu::Parallax.create(:x => 200, :y => 200, :rotation_center => :top_left)
@@ -160,7 +160,7 @@ class Room < Chingu::GameState
 		while !ok
 			print '.'
 			ok = true
-			[Shelf, DeliveryZone, Container].each_collision([Shelf, DeliveryZone], Container) do |_, container|
+			[Shelf, DeliveryZone, Container, Forklift, DefaultForklift].each_collision([Shelf, DeliveryZone, Forklift, DefaultForklift], Container) do |_, container|
 				container.x = rand($window.width - (50*0.5))
 				container.y = rand($window.height - (40*0.5))
 				
@@ -261,6 +261,8 @@ class Room < Chingu::GameState
 			if !forklift.loaded?
 				container.destroy
 				forklift.load!
+				
+				create_containers if !Container.all.any?
 			else
 				forklift.crash!
 				forklift.color = @red
@@ -284,6 +286,8 @@ class Room < Chingu::GameState
 			if !forklift.loaded?
 				container.destroy
 				forklift.load!
+
+				create_containers if !Container.all.any?
 			else
 				forklift.crash!
 				forklift.color = @red
