@@ -210,6 +210,13 @@ class Room < Chingu::GameState
 				ok = false
 				print '.'
 			end
+			[Shelf, Container, DefaultForklift].each_collision([Shelf, Container], DefaultForklift) do |_, forklift|
+				forklift.x = rand($window.width - (117*0.5))
+				forklift.y = rand($window.height - (50*0.5))
+				
+				ok = false
+				print '.'
+			end
 		end
 		
 		puts
