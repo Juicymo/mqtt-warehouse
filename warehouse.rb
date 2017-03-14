@@ -104,6 +104,7 @@ class Room < Chingu::GameState
 		create_delivery_zones
 		create_containers
 		@forklifts[:default] = create_forklift 'Default', true
+		@forklifts[:default].token = :default
 		
 		send_mqtt_warehouse_settings
 		
@@ -171,11 +172,20 @@ class Room < Chingu::GameState
 		puts
 	end
 	
+	def remove_forklift token
+		if @forklifts[token] != nil
+			forklift = @forklifts[token]
+			puts "Removing forklift \"#{forklift.name}\""
+			forklift.destroy
+			@forklifts.delete token
+		end
+	end
+	
 	def create_forklift name, default = false
 		to_be_removed = []
 		@forklifts.each do |token, forklift|
 			if forklift.name == name
-				puts "Removing forklift \"#{name}\""
+				puts "Removing forklift \"#{forklift.name}\""
 				forklift.destroy
 				to_be_removed << token
 			end
@@ -213,6 +223,19 @@ class Room < Chingu::GameState
 		process_mqtt_commands
 		
 		game_objects.each { |go| go.color = @white }
+		
+		Forklift.all.each do |forklift|
+			if (forklift.x < 0 || forklift.x > $window.width) || (forklift.y < 0 || forklift.y > $window.height)
+				remove_forklift forklift.token
+			end
+		end
+		
+		DefaultForklift.all.each do |forklift|
+			if (forklift.x < 0 || forklift.x > $window.width) || (forklift.y < 0 || forklift.y > $window.height)
+				forklift.x = $window.width / 2
+				forklift.y = $window.height / 2
+			end
+		end
 	
 		Forklift.each_collision(DeliveryZone) do |forklift, _|
 			if forklift.loaded?
@@ -313,6 +336,7 @@ class Room < Chingu::GameState
 						token = Digest::SHA1.hexdigest(data[:name] + Time.now.to_s)
 						
 						@forklifts[token] = create_forklift data[:name]
+						@forklifts[token].token = token
 						
 						send_mqtt_command topic, "name=#{data[:name]},token=#{token}"
 					else
@@ -453,7 +477,7 @@ class Forklift < GameObject
 	trait :bounding_circle, :debug => true
 	traits :velocity, :collision_detection, :rotation, :direction
 	
-	attr_accessor :name, :dirty
+	attr_accessor :name, :dirty, :token
 	attr_reader :score, :data
 	
 	def setup
@@ -545,9 +569,13 @@ class Forklift < GameObject
 		apply_dampening
 	
 	  # screen edge bouncing
-	  if (@x < 0 || @x > $window.width) || (@y < 0 || @y > $window.height)
-	  	self.x = $window.width / 2; self.y = $window.height / 2;
-	  end
+	  # if (@x < 0 || @x > $window.width) || (@y < 0 || @y > $window.height)
+	  # 	if self.token == :default
+	  # 		self.x = $window.width / 2; self.y = $window.height / 2;
+	  # 	else
+	  # 		.outside_window?
+	  # 	end
+	  # end
 		#self.velocity_x = -self.velocity_x if @x < 0 || @x > $window.width
 		#self.velocity_y = -self.velocity_y if @y < 0 || @y > $window.height
 	end
@@ -557,6 +585,10 @@ class Forklift < GameObject
 		self.velocity_x = 0 if self.velocity_x.abs <= MOVE_DAMPENING
 		self.velocity_y += (self.velocity_y > 0) ? -MOVE_DAMPENING : MOVE_DAMPENING if self.velocity_y != 0 && self.velocity_y.abs > MOVE_DAMPENING
 		self.velocity_y = 0 if self.velocity_y.abs <= MOVE_DAMPENING
+	end
+	
+	def self.inside_viewport
+		all.select { |forklift| forklift.game_state.viewport.inside?(forklift) }
 	end
 end
 
