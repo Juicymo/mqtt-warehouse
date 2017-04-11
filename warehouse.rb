@@ -50,7 +50,7 @@ class Room < Chingu::GameState
     
     @tokens = {}
     @forklifts = {}
-    @containers = []
+    @containers = {}
     @shelves = []
     @zones = []
     @long_lines = []
@@ -194,7 +194,15 @@ class Room < Chingu::GameState
   
   def create_containers
     print 'Creating containers'
-    CONTAINERS.times { @containers << Container.create(:x => rand($window.width - (50*0.5)), :y => rand($window.height - (40*0.5)), :angle => rand(360)) }
+    CONTAINERS.times do |i|
+      c = Container.create(
+        :x => rand($window.width - (50*0.5)),
+        :y => rand($window.height - (40*0.5)),
+        :angle => rand(360)
+      )
+      c.number = i+1
+      @containers[c.number] = c
+    end
     
     ok = false
     while !ok
@@ -387,6 +395,7 @@ class Room < Chingu::GameState
     end
     Forklift.each_collision(Container) do |forklift, container|
       if !forklift.loaded?
+        @containers.delete(container.number)
         container.destroy
         forklift.load!
         
@@ -412,6 +421,7 @@ class Room < Chingu::GameState
     end
     DefaultForklift.each_collision(Container) do |forklift, container|
       if !forklift.loaded?
+        @containers.delete(container.number)
         container.destroy
         forklift.load!
 
@@ -477,7 +487,7 @@ class Room < Chingu::GameState
       payload[:forklifts][forklift.name] = forklift.data
     end
     
-    @containers.each do |container|
+    @containers.each do |_, container|
       payload[:containers] << container.data
     end
   
@@ -601,6 +611,7 @@ class Container < GameObject
   traits :collision_detection
   
   attr_reader :data
+  attr_accessor :number
 
   def setup
     @image = Image["container.png"]
@@ -610,7 +621,7 @@ class Container < GameObject
   end
   
   def data
-    {x: x, y: y}
+    {x: x, y: y, n: number}
   end
 
   def w; 32; end
