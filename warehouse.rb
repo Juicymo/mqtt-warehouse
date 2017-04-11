@@ -112,11 +112,10 @@ class Room < Chingu::GameState
   end
   
   def load_tokens
-    if !File.exists?('tokens.csv')
-      CSV.open("tokens.csv", "w") do |_|; end
+    tokens = {}
+    if File.exists?('tokens.csv')
+      tokens = SmarterCSV.process('tokens.csv')
     end
-    
-    tokens = SmarterCSV.process('tokens.csv')
     
     tokens.each do |record|
       @tokens[record[:name]] = record[:token]
