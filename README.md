@@ -154,7 +154,7 @@ mosquitto_pub -t 'warehouse/daae060e7e872f812e20b03810f2f4df351fd446/control' -m
 
 **Remove a forklift**
 
-In order to remove your forklift from the warehouse, publish a message to topic `warehouse/<ACCESS_TOKEN>/control` where `<ACCESS_TOKEN>` has to be substituted by your `ACCESS_TOKEN`.
+In order to remove your forklift from the warehouse, publish a message to topic `warehouse/<ACCESS_TOKEN>/remove` where `<ACCESS_TOKEN>` has to be substituted by your `ACCESS_TOKEN`.
 
 When forklift is removed, its score, access key and access token are erased. In order to re-create it a new handshake has to be performed.
 
